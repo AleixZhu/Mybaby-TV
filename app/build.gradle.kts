@@ -35,6 +35,14 @@ android {
     buildFeatures {
         viewBinding = true
     }
+
+    applicationVariants.all {
+        val variantName = name
+        outputs.all {
+            val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            output.outputFileName = "公主答题可看-${variantName}.apk"
+        }
+    }
 }
 
 dependencies {

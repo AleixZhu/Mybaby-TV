@@ -68,10 +68,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -1)
+          if [ -z "$APK" ]; then echo "No debug APK found"; exit 1; fi
+          DEST="/tmp/公主答题可看.apk"
+          cp "$APK" "$DEST"
           gh release delete apk-latest --yes --cleanup-tag 2>/dev/null || true
           gh release create apk-latest \
-            app/build/outputs/apk/debug/app-debug.apk \
-            --title "Latest APK (auto-build)" \
+            "$DEST" \
+            --title "公主答题可看 (auto-build)" \
             --notes "Auto-built debug APK from ${{ github.sha }}" \
             --prerelease
-          echo "Download: https://github.com/${{ github.repository }}/releases/download/apk-latest/app-debug.apk"
+          echo "Download: https://github.com/${{ github.repository }}/releases/download/apk-latest/%E5%85%AC%E4%B8%BB%E7%AD%94%E9%A2%98%E5%8F%AF%E7%9C%8B.apk"

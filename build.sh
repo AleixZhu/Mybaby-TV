@@ -2,7 +2,7 @@
 # 本地一键编译脚本（macOS / Linux）
 # 用法：./build.sh
 # 前置：已装 JDK 17 + Android SDK（或 Android Studio）
-# 产物：app/build/outputs/apk/debug/app-debug.apk
+# 产物：app/build/outputs/apk/debug/公主答题可看-debug.apk
 
 set -e
 
@@ -70,8 +70,8 @@ echo "→ 开始编译 debug APK（首次约 3-5 分钟，之后增量很快）.
 ./gradlew assembleDebug --no-daemon
 
 # 6. 输出结果
-APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
-if [ -f "$APK_PATH" ]; then
+APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" -type f 2>/dev/null | head -1)
+if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
   SIZE=$(ls -lh "$APK_PATH" | awk '{print $5}')
   echo ""
   echo "=========================================="

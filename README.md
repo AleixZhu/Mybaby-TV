@@ -1,4 +1,4 @@
-# 儿童看电视管家（KidsTvGuard）
+# 公主答题可看（KidsTvGuard）
 
 在智能电视（Android TV / 厂商定制 Android）上运行的家长管控 APP。孩子看视频 APP 到设定时间就弹题；答对继续看，答错加题，最多加到 5 道；关机再开机若上次没答完，立即补弹。
 
@@ -84,7 +84,7 @@ KidsTvGuard/
    ```
 3. 打开仓库页面 → `Actions` 标签 → 看到 "Build APK" workflow 正在跑（约 5–8 分钟）
 4. 跑完后点进 workflow run → 页面底部 `Artifacts` 区域 → 下载 `KidsTvGuard-debug-apk`
-5. 解压得到 `app-debug.apk`，拷到 U 盘或直接用 adb 装到电视
+5. 解压得到 `公主答题可看-debug.apk`，拷到 U 盘或直接用 adb 装到电视
 
 **优点**：不用装 JDK、不用装 Android Studio、不用配 SDK，完全云端。
 **费用**：GitHub Actions 公开仓库免费无限；私有仓库每月 2000 分钟免费额度，够用。
@@ -101,7 +101,7 @@ KidsTvGuard/
 1. 打开 Android Studio → `File → Open` → 选 `KidsTvGuard` 目录
 2. 等 Gradle Sync 完成（首次约 3–5 分钟，会自动下载依赖）
 3. 菜单 `Build → Build Bundle(s) / APK(s) → Build APK(s)`
-4. 编译完成后点通知里的 `locate` 链接，或手动到 `app/build/outputs/apk/debug/app-debug.apk` 取
+4. 编译完成后点通知里的 `locate` 链接，或手动到 `app/build/outputs/apk/debug/公主答题可看-debug.apk` 取
 
 **优点**：有 IDE 可以改代码、调试、看日志；增量编译很快（10 秒级）。
 **缺点**：首次下载 Android Studio + SDK 约 3GB，需要耐心。
@@ -148,7 +148,7 @@ cd KidsTvGuard
 echo "sdk.dir=$ANDROID_HOME" > local.properties
 gradle wrapper --gradle-version 8.7    # 首次需要，生成 gradlew + wrapper jar
 ./gradlew assembleDebug
-# 产物：app/build/outputs/apk/debug/app-debug.apk
+# 产物：app/build/outputs/apk/debug/公主答题可看-debug.apk
 ```
 
 **Release 签名版**（可选）：
@@ -159,7 +159,7 @@ keytool -genkey -v -keystore kids-tv-guard.jks -keyalg RSA -keysize 2048 -validi
 
 # 在 app/build.gradle.kts 里加 signingConfigs，然后
 ./gradlew assembleRelease
-# 产物：app/build/outputs/apk/release/app-release.apk
+# 产物：app/build/outputs/apk/release/公主答题可看-release.apk
 ```
 
 ### 三条路径对比
@@ -179,7 +179,7 @@ keytool -genkey -v -keystore kids-tv-guard.jks -keyalg RSA -keysize 2048 -validi
 1. **ADB 推**：电视开启"开发者选项 → ADB 调试"，然后
    ```bash
    adb connect <电视 IP>:5555
-   adb install -r app/build/outputs/apk/debug/app-debug.apk
+   adb install -r app/build/outputs/apk/debug/公主答题可看-debug.apk
    ```
 2. **U 盘**：把 APK 拷进 U 盘，插电视，用电视自带文件管理器安装（需要允许"未知来源"）。
 3. **局域网传输**：用 `Send Files to TV` 之类的 APP 推。
@@ -192,7 +192,7 @@ keytool -genkey -v -keystore kids-tv-guard.jks -keyalg RSA -keysize 2048 -validi
 2. **使用情况访问** — 检测前台是不是视频 APP，跳系统"使用情况访问"，找到本 APP 开启。
 3. **通知权限**（Android 13+） — 前台服务通知需要，弹窗允许即可。
 
-三个都通过后点"启动守护"。通知栏会出现"看电视守护运行中"。可以先点"立即试弹一次"验证悬浮窗效果。
+三个都通过后点"启动守护"。通知栏会出现"公主答题可看 运行中"。可以先点"立即试弹一次"验证悬浮窗效果。
 
 ## 自定义题库
 
@@ -390,7 +390,7 @@ APP 设置：远程 URL 填 `https://your-name.gitee.io/kids-tv-bank/grade{grade
 
 1. 主页点"立即试弹一次"，弹出答题窗。
 2. **不作答**，直接长按电视电源键关机（或拔电）。
-3. 开机 → 通知栏出现"看电视守护运行中" → 约 1.5 秒后答题窗立即弹出。
+3. 开机 → 通知栏出现"公主答题可看 运行中" → 约 1.5 秒后答题窗立即弹出。
 
 原理：`show()` 时写 `pendingPopupOnBoot=true`，`finishRound()` 时写 false。中途断电，标记保留在 SharedPreferences 里。`BootReceiver` 收到 `BOOT_COMPLETED` 拉起 `GuardService`，Service `onCreate` 读到 true 就调用 `controller.show(bootPending=true)`，并且沿用关机前的 `wrongStreak`，孩子接着答剩下的题。
 
