@@ -11,13 +11,27 @@ android {
         applicationId = "com.kidstvguard"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        // 版本号可由 CI 注入：./gradlew assembleRelease -Pvc=<versionCode> -Pvn=<versionName>
+        // 本地不传则用默认值。应用内自动更新靠 versionCode 比对，CI 每次构建用 GitHub run number 递增。
+        versionCode = (project.findProperty("vc") as? String)?.toIntOrNull() ?: 1
+        versionName = (project.findProperty("vn") as? String) ?: "1.0.0"
+    }
+
+    signingConfigs {
+        create("release") {
+            // 固定签名密钥（仓库内 signing/release.p12）。每次构建都用同一把钥匙签名，
+            // 这样应用内自动更新才能覆盖安装；换钥匙会导致老设备"签名不一致"装不上。
+            storeFile = file("../signing/release.p12")
+            storePassword = "kidstvguard"
+            keyAlias = "upload"
+            keyPassword = "kidstvguard"
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

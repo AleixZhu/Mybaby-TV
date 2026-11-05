@@ -117,6 +117,18 @@ class PrefsManager private constructor(context: Context) {
         get() = sp.getBoolean(KEY_LAST_SYNC_OK, false)
         set(v) = sp.edit().putBoolean(KEY_LAST_SYNC_OK, v).apply()
 
+    // ===== 应用内自动更新 =====
+    /** 更新源 version.json 地址；默认指向本仓库 GitHub Release。可改成自建 OSS/Gitee 镜像。 */
+    var updateFeedUrl: String
+        get() = sp.getString(KEY_UPDATE_FEED, DEFAULT_UPDATE_FEED)
+            ?.trim()?.takeIf { it.isNotEmpty() } ?: DEFAULT_UPDATE_FEED
+        set(v) = sp.edit().putString(KEY_UPDATE_FEED, v.trim()).apply()
+
+    /** 打开 APP 时是否静默检查更新（有新版本才弹框）。 */
+    var autoCheckUpdate: Boolean
+        get() = sp.getBoolean(KEY_AUTO_CHECK_UPDATE, true)
+        set(v) = sp.edit().putBoolean(KEY_AUTO_CHECK_UPDATE, v).apply()
+
     companion object {
         private const val FILE_NAME = "kids_tv_guard_prefs"
         private const val SALT = "KidsTvGuard::2026::"
@@ -138,11 +150,18 @@ class PrefsManager private constructor(context: Context) {
         private const val KEY_LAST_SYNC_MSG = "last_sync_message"
         private const val KEY_LAST_SYNC_OK = "last_sync_success"
 
+        private const val KEY_UPDATE_FEED = "update_feed_url"
+        private const val KEY_AUTO_CHECK_UPDATE = "auto_check_update"
+
         const val DEFAULT_PASSWORD = "1234"
         const val DEFAULT_INTERVAL_MIN = 15
         const val DEFAULT_MAX_QUESTIONS = 5
         const val DEFAULT_PER_Q_TIMEOUT = 60
         const val DEFAULT_AUTO_SYNC_HOURS = 24
+
+        /** 默认更新源：本仓库 GitHub Release 上的 version.json（每次 push 自动刷新）。 */
+        const val DEFAULT_UPDATE_FEED =
+            "https://github.com/AleixZhu/Mybaby-TV/releases/download/apk-latest/version.json"
 
         val ALLOWED_INTERVALS = intArrayOf(5, 10, 15, 20, 30)
 

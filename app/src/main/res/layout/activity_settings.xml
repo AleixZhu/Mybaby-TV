@@ -447,6 +447,95 @@
                 android:textSize="12sp" />
         </LinearLayout>
 
+        <!-- 应用更新 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_card"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="应用更新（功能升级不用手动找 APK）"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/tv_update_current"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="当前版本：--"
+                android:textColor="#B0BEC5"
+                android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="更新源 version.json 地址，默认指向本仓库 GitHub Release，每次 push 自动刷新。电视访问 GitHub 慢的话，可把 version.json 和 APK 镜像到阿里云 OSS/Gitee，再改这里。打开 APP 会自动比对版本，有新版就弹框，点一下下载并安装（首次需允许「安装未知应用」）。"
+                android:textColor="#78909C"
+                android:textSize="12sp" />
+
+            <EditText
+                android:id="@+id/et_update_url"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_password_field"
+                android:hint="https://.../releases/download/apk-latest/version.json"
+                android:inputType="textUri"
+                android:maxLines="2"
+                android:padding="10dp"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#607D8B"
+                android:textSize="14sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_card"
+                android:orientation="horizontal"
+                android:padding="8dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:layout_weight="1"
+                    android:text="打开 APP 时自动检查更新"
+                    android:textColor="#CFD8DC"
+                    android:textSize="14sp" />
+
+                <Switch
+                    android:id="@+id/sw_auto_update"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btn_check_update"
+                style="@style/PrimaryButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="保存并检查更新" />
+
+            <TextView
+                android:id="@+id/tv_update_log"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="尚未检查"
+                android:textColor="#B0BEC5"
+                android:textSize="12sp" />
+        </LinearLayout>
+
         <!-- 密码 -->
         <LinearLayout
             android:layout_width="match_parent"

@@ -36,15 +36,16 @@ KidsTvGuard/
 ├── settings.gradle.kts
 ├── gradle.properties
 ├── gradle/wrapper/gradle-wrapper.properties  # Gradle 8.7
+├── signing/release.p12           # 固定签名密钥（自动更新覆盖安装靠它）
 └── app/
-    ├── build.gradle.kts          # minSdk 24 / targetSdk 34
+    ├── build.gradle.kts          # minSdk 24 / targetSdk 34 + release 签名 + 版本注入
     └── src/main/
         ├── AndroidManifest.xml
         ├── assets/questions.json # 20 道内置示例题
         ├── java/com/kidstvguard/
         │   ├── data/
         │   │   ├── Question.kt
-        │   │   ├── PrefsManager.kt          # 设置+密码+断电续弹状态
+        │   │   ├── PrefsManager.kt          # 设置+密码+断电续弹+更新源
         │   │   └── QuestionRepository.kt    # 内置+外部 JSON 加载/导入
         │   ├── overlay/
         │   │   └── QuizOverlayController.kt # 悬浮答题窗状态机
@@ -53,13 +54,16 @@ KidsTvGuard/
         │   │   ├── GuardServiceRunning.kt
         │   │   └── BootReceiver.kt          # 开机广播
         │   ├── ui/
-        │   │   ├── MainActivity.kt          # 状态面板+权限引导
-        │   │   └── SettingsActivity.kt      # 密码门+全部配置项
+        │   │   ├── MainActivity.kt          # 状态面板+权限引导+打开即查更新
+        │   │   └── SettingsActivity.kt      # 密码门+全部配置项+应用更新卡片
+        │   ├── update/
+        │   │   └── UpdateManager.kt         # 应用内自动更新（拉版本/下载/装）
         │   └── util/
         │       └── UsageStatsHelper.kt      # 前台包检测+视频白名单
         └── res/
-            ├── layout/          # activity_main / activity_settings / dialog_password / view_quiz_overlay
+            ├── layout/          # activity_main / activity_settings / dialog_password / dialog_update_progress / view_quiz_overlay
             ├── drawable/        # 面板/按钮/输入框/图标/TV banner
+            ├── xml/             # file_paths（FileProvider 授权下载目录）
             └── values/          # strings / colors / themes / styles
 ```
 
@@ -334,6 +338,29 @@ APP 设置：远程 URL 填 `https://your-name.gitee.io/kids-tv-bank/grade{grade
 3. 复制文件的"URL"（形如 `https://your-bucket.oss-cn-hangzhou.aliyuncs.com/questions.json`）
 4. 填到 APP 里
 5. 以后改题目：控制台"文件管理" → 下载 → 改 → 覆盖上传（或用 OSS Browser 客户端）
+
+## 应用内自动更新（功能升级不用手动找 APK）
+
+**能做到的**：你改完代码 `git push`，云端自动编译并把新 APK + `version.json` 发布到 GitHub Release。电视端打开 APP 会自动比对版本，发现新版就弹框，点「立即更新」→ 后台下载（带进度条）→ 弹一次系统安装确认 → 装完就是最新版。设置页「应用更新」卡片可手动检查、改更新源地址、开关「打开时自动检查」。
+
+**必须先讲清的 Android 硬规则**：
+
+1. APP 的「代码/功能」改动**必须重装新 APK** 才能生效，系统安全沙箱不允许已装 APP 在运行时替换自己的编译代码。所以不存在「纯云端热替换、打开即最新功能」。能无感更新的只有**内容**（题库、年级、间隔等远程 JSON / 配置），这些本来就不用重装。
+2. 新 APK 必须和已装版本用**同一把签名密钥**，否则系统报「签名不一致」拒绝覆盖安装。本仓库用固定的 `signing/release.p12` 签名，CI 每次构建签名一致，更新才装得上。
+3. 「连一次确认都不点、完全静默」只有系统签名 / 设备管理器 / 应用商店特权才做得到，侧载 APP 做不到。本方案是「打开→自动下载→点一次安装」，已是侧载能做到的最省事形态。
+
+**⚠️ 首次切换的一次性操作（很重要）**：你电视上现在装的旧版本是用 GitHub 临时 debug 密钥签名的，和新的固定签名**不是同一把钥匙**，无法直接覆盖升级。第一次请手动：**卸载旧 APP → 安装新的签名版**（Release 里的 `GongZhuDaTiKeKan.apk`）。卸载会清掉本地设置（密码/间隔/年级/题库缓存），装好新版后重新设一次即可（远程题库会自动拉回）。**这一次之后**，以后所有更新都能走应用内自动更新，不用再手动。
+
+**以后怎么发新版**：改完代码正常 `git commit` + `git push origin main`。CI 用 GitHub run number 当 `versionCode`（每次 push 自动 +1），构建签名 release APK，生成 `version.json` 一起发布到固定 Release。电视端下次打开 APP 就会检测到并提示更新，你不用碰电视。
+
+**固定地址**：
+
+- 更新源（version.json）：`https://github.com/AleixZhu/Mybaby-TV/releases/download/apk-latest/version.json`
+- APK：`https://github.com/AleixZhu/Mybaby-TV/releases/download/apk-latest/GongZhuDaTiKeKan.apk`
+
+**国内网络注意**：电视直连 GitHub 可能慢或不通。若自动更新经常失败，把 `version.json` 和 APK 镜像一份到阿里云 OSS / Gitee（公共读），在设置页「应用更新」里把更新源地址改成你的 OSS 地址即可（`version.json` 里的 `apkUrl` 也要指向 OSS 上的 APK）。
+
+**签名密钥安全提示**：`signing/release.p12` 和密码（`kidstvguard`）目前直接放在仓库里，因为这是公开仓库，等于密钥公开。对家用/侧载 APP 风险很低（别人拿到密钥也无法替换你 Release 上的 APK，除非同时盗了你的 GitHub 账号）。若以后要商用或上架，请把密钥移到 GitHub Actions Secrets，并改用私密保管。
 
 ## 部署方案：需要买服务器吗？
 

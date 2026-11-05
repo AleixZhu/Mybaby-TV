@@ -47,37 +47,59 @@ jobs:
             chmod +x gradlew
           fi
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
-
-      - name: List APK outputs
+      - name: Compute version (versionCode = GitHub run number)
+        id: ver
         run: |
-          echo "=== Debug APKs ==="
-          find app/build/outputs/apk/debug -name "*.apk" -exec ls -lh {} \; 2>/dev/null || echo "No debug APK"
+          VC=${{ github.run_number }}
+          VN="1.0.${VC}"
+          echo "vc=$VC" >> "$GITHUB_OUTPUT"
+          echo "vn=$VN" >> "$GITHUB_OUTPUT"
+          echo "versionCode=$VC versionName=$VN"
 
-      - name: Upload debug APK artifact
+      - name: Verify signing keystore is readable
+        run: |
+          if [ ! -f signing/release.p12 ]; then echo "signing/release.p12 missing"; exit 1; fi
+          keytool -list -keystore signing/release.p12 -storetype PKCS12 -storepass kidstvguard
+          echo "keystore OK"
+
+      - name: Build signed release APK
+        run: ./gradlew assembleRelease --no-daemon --stacktrace -Pvc=${{ steps.ver.outputs.vc }} -Pvn=${{ steps.ver.outputs.vn }}
+
+      - name: Prepare release assets (APK + version.json)
+        run: |
+          set -e
+          REL=$(find app/build/outputs/apk/release -name "*.apk" ! -name "*unsigned*" | head -1)
+          if [ -z "$REL" ]; then echo "No signed release APK found"; exit 1; fi
+          cp "$REL" /tmp/GongZhuDaTiKeKan.apk
+          VC="${{ steps.ver.outputs.vc }}"
+          VN="${{ steps.ver.outputs.vn }}"
+          CHANGELOG=$(git log -1 --pretty=%s | sed 's/\\/\\\\/g; s/"/\\"/g')
+          APK_URL="https://github.com/${{ github.repository }}/releases/download/apk-latest/GongZhuDaTiKeKan.apk"
+          printf '{\n  "versionCode": %s,\n  "versionName": "%s",\n  "apkUrl": "%s",\n  "changelog": "%s",\n  "forceUpdate": false,\n  "updatedAt": "%s"\n}\n' "$VC" "$VN" "$APK_URL" "$CHANGELOG" "$(date -u '+%Y-%m-%d %H:%M:%S UTC')" > /tmp/version.json
+          echo "=== version.json ==="
+          cat /tmp/version.json
+          echo "=== apk ==="
+          ls -lh /tmp/GongZhuDaTiKeKan.apk
+
+      - name: Upload APK artifact (含中文文件名)
         uses: actions/upload-artifact@v4
         with:
-          name: KidsTvGuard-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: KidsTvGuard-apk
+          path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish APK to Release (fixed download link)
+      - name: Publish to Release (固定下载链接 + 自动更新源)
         if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -1)
-          if [ -z "$APK" ]; then echo "No debug APK found"; exit 1; fi
-          # GitHub Release 资产名不支持中文（会被强制改成 default.apk），
-          # 这里用拼音作为固定下载名；带中文文件名的 APK 见上方 Artifacts 压缩包。
-          DEST="/tmp/GongZhuDaTiKeKan.apk"
-          cp "$APK" "$DEST"
           gh release delete apk-latest --yes --cleanup-tag 2>/dev/null || true
           gh release create apk-latest \
-            "$DEST" \
+            /tmp/GongZhuDaTiKeKan.apk \
+            /tmp/version.json \
             --title "公主答题可看 (auto-build)" \
-            --notes "自动编译的 debug APK（commit ${{ github.sha }}）。Release 资产名为拼音 GongZhuDaTiKeKan.apk（GitHub 不支持中文资产名）；如需中文文件名 公主答题可看-debug.apk，请下载本次 run 的 Artifacts 压缩包 KidsTvGuard-debug-apk。安装到电视后桌面显示名仍为「公主答题可看」。" \
+            --notes "签名 release APK + 自动更新源 version.json（versionCode=${{ steps.ver.outputs.vc }}）。电视端打开 APP 会自动比对版本并提示更新。" \
             --prerelease
-          echo "Download: https://github.com/${{ github.repository }}/releases/download/apk-latest/GongZhuDaTiKeKan.apk"
+          echo "APK : https://github.com/${{ github.repository }}/releases/download/apk-latest/GongZhuDaTiKeKan.apk"
+          echo "Feed: https://github.com/${{ github.repository }}/releases/download/apk-latest/version.json"

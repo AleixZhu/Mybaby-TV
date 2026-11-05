@@ -16,6 +16,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.kidstvguard.R
 import com.kidstvguard.data.PrefsManager
 import com.kidstvguard.data.QuestionRepository
+import com.kidstvguard.update.UpdateManager
 
 /**
  * 设置页。进入前弹密码框，密码正确才展示内容。
@@ -155,6 +156,9 @@ class SettingsActivity : AppCompatActivity() {
 
         // 远程题库
         bindRemoteSync()
+
+        // 应用更新
+        bindUpdateSection()
 
         // 修改密码
         val etOld = findViewById<EditText>(R.id.et_old)
@@ -299,6 +303,34 @@ class SettingsActivity : AppCompatActivity() {
         val url = prefs.questionBankUrl
         val prefix = if (url.isBlank()) "未启用远程同步。" else "URL：$url\n"
         tv.text = prefix + "最近同步：" + repo.lastSyncSummary()
+    }
+
+    private fun bindUpdateSection() {
+        findViewById<TextView>(R.id.tv_update_current).text =
+            "当前版本：${UpdateManager.currentVersionName(this)}（vc=${UpdateManager.currentVersionCode(this)}）"
+
+        val etUrl = findViewById<EditText>(R.id.et_update_url)
+        etUrl.setText(prefs.updateFeedUrl)
+
+        val swAuto = findViewById<Switch>(R.id.sw_auto_update)
+        swAuto.isChecked = prefs.autoCheckUpdate
+        swAuto.setOnCheckedChangeListener { _, checked -> prefs.autoCheckUpdate = checked }
+
+        val tvLog = findViewById<TextView>(R.id.tv_update_log)
+        val btn = findViewById<Button>(R.id.btn_check_update)
+        btn.setOnClickListener {
+            val url = etUrl.text?.toString()?.trim().orEmpty()
+            prefs.updateFeedUrl = url
+            if (url.isEmpty() || !(url.startsWith("http://") || url.startsWith("https://"))) {
+                tvLog.text = "✗ 更新地址非法，需以 http:// 或 https:// 开头"
+                return@setOnClickListener
+            }
+            btn.isEnabled = false
+            UpdateManager.check(this, silentIfNone = false) { log ->
+                tvLog.text = log
+                if (log != "检查中…") btn.isEnabled = true
+            }
+        }
     }
 
     override fun onBackPressed() {

@@ -19,6 +19,7 @@ import com.kidstvguard.data.QuestionRepository
 import com.kidstvguard.overlay.QuizOverlayController
 import com.kidstvguard.service.GuardService
 import com.kidstvguard.service.GuardServiceRunning
+import com.kidstvguard.update.UpdateManager
 import com.kidstvguard.util.UsageStatsHelper
 
 class MainActivity : AppCompatActivity() {
@@ -99,6 +100,11 @@ class MainActivity : AppCompatActivity() {
             // 试弹不写 pendingPopupOnBoot，避免测试完关机导致再次开机又弹
             GuardService.start(this)
             GuardService.popNow(this)
+        }
+
+        // 打开 APP 时静默检查更新：有新版本才弹框，没有就不打扰
+        if (prefs.autoCheckUpdate) {
+            UpdateManager.check(this, silentIfNone = true)
         }
     }
 
