@@ -70,12 +70,14 @@ jobs:
         run: |
           APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -1)
           if [ -z "$APK" ]; then echo "No debug APK found"; exit 1; fi
-          DEST="/tmp/公主答题可看.apk"
+          # GitHub Release 资产名不支持中文（会被强制改成 default.apk），
+          # 这里用拼音作为固定下载名；带中文文件名的 APK 见上方 Artifacts 压缩包。
+          DEST="/tmp/GongZhuDaTiKeKan.apk"
           cp "$APK" "$DEST"
           gh release delete apk-latest --yes --cleanup-tag 2>/dev/null || true
           gh release create apk-latest \
             "$DEST" \
             --title "公主答题可看 (auto-build)" \
-            --notes "Auto-built debug APK from ${{ github.sha }}" \
+            --notes "自动编译的 debug APK（commit ${{ github.sha }}）。Release 资产名为拼音 GongZhuDaTiKeKan.apk（GitHub 不支持中文资产名）；如需中文文件名 公主答题可看-debug.apk，请下载本次 run 的 Artifacts 压缩包 KidsTvGuard-debug-apk。安装到电视后桌面显示名仍为「公主答题可看」。" \
             --prerelease
-          echo "Download: https://github.com/${{ github.repository }}/releases/download/apk-latest/%E5%85%AC%E4%B8%BB%E7%AD%94%E9%A2%98%E5%8F%AF%E7%9C%8B.apk"
+          echo "Download: https://github.com/${{ github.repository }}/releases/download/apk-latest/GongZhuDaTiKeKan.apk"
