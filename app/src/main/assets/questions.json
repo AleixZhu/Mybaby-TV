@@ -1,0 +1,22 @@
+[
+  { "stem": "1 + 1 = ?", "options": ["1", "2", "3", "4"], "answer": 1, "explain": "1 加 1 等于 2", "grades": [1] },
+  { "stem": "3 + 5 = ?", "options": ["7", "8", "9", "10"], "answer": 1, "explain": "3 加 5 等于 8", "grades": [1] },
+  { "stem": "9 + 6 - 3 = ?", "options": ["10", "11", "12", "13"], "answer": 2, "explain": "9 加 6 是 15，减 3 得 12", "grades": [1, 2] },
+  { "stem": "12 - 7 = ?", "options": ["4", "5", "6", "7"], "answer": 1, "explain": "12 减 7 等于 5", "grades": [1, 2] },
+  { "stem": "6 × 4 = ?", "options": ["20", "22", "24", "26"], "answer": 2, "explain": "6 乘 4 等于 24", "grades": [2] },
+  { "stem": "45 ÷ 9 = ?", "options": ["4", "5", "6", "7"], "answer": 1, "explain": "45 除以 9 等于 5", "grades": [2, 3] },
+  { "stem": "15 + 27 = ?", "options": ["41", "42", "43", "44"], "answer": 1, "explain": "15 加 27 等于 42", "grades": [2] },
+  { "stem": "7 × 8 = ?", "options": ["54", "55", "56", "57"], "answer": 2, "explain": "7 乘 8 等于 56", "grades": [3] },
+  { "stem": "100 - 38 = ?", "options": ["60", "61", "62", "63"], "answer": 2, "explain": "100 减 38 等于 62", "grades": [3] },
+  { "stem": "81 ÷ 9 = ?", "options": ["7", "8", "9", "10"], "answer": 2, "explain": "81 除以 9 等于 9", "grades": [3] },
+  { "stem": "13 × 3 = ?", "options": ["36", "37", "38", "39"], "answer": 3, "explain": "13 乘 3 等于 39", "grades": [3, 4] },
+  { "stem": "144 ÷ 12 = ?", "options": ["10", "11", "12", "13"], "answer": 2, "explain": "144 除以 12 等于 12", "grades": [4] },
+  { "stem": "一小时有多少分钟？", "options": ["30", "45", "60", "90"], "answer": 2, "explain": "1 小时 = 60 分钟", "grades": [1, 2, 3] },
+  { "stem": "一年有多少个月？", "options": ["10", "11", "12", "13"], "answer": 2, "explain": "12 个月", "grades": [1, 2] },
+  { "stem": "1 千克 = ? 克", "options": ["10", "100", "1000", "10000"], "answer": 2, "explain": "1 千克 = 1000 克", "grades": [3, 4] },
+  { "stem": "中国的首都是哪座城市？", "options": ["上海", "北京", "广州", "深圳"], "answer": 1, "explain": "北京" },
+  { "stem": "水的化学式是？", "options": ["CO2", "O2", "H2O", "NaCl"], "answer": 2, "explain": "H2O", "grades": [5, 6, 7, 8, 9] },
+  { "stem": "下列哪个是哺乳动物？", "options": ["鲨鱼", "海豚", "章鱼", "金鱼"], "answer": 1, "explain": "海豚是哺乳动物", "grades": [3, 4, 5, 6] },
+  { "stem": "光在真空中的传播速度约是？", "options": ["3 万公里/秒", "30 万公里/秒", "300 万公里/秒", "3 千公里/秒"], "answer": 1, "explain": "约 30 万公里/秒", "grades": [6, 7, 8, 9] },
+  { "stem": "《静夜思》的作者是谁？", "options": ["杜甫", "白居易", "李白", "王维"], "answer": 2, "explain": "李白", "grades": [1, 2, 3, 4, 5, 6] }
+]

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">儿童看电视管家</string>
+    <string name="tv_banner_text">Kids TV Guard</string>
+    <string name="notif_channel_name">看电视守护</string>
+    <string name="notif_title">看电视守护运行中</string>
+    <string name="notif_text">每 %1$d 分钟弹题一次</string>
+</resources>

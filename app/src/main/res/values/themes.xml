@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.KidsTvGuard" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/bg_dark</item>
+        <item name="android:colorPrimary">@color/accent_gold</item>
+        <item name="android:colorAccent">@color/accent_gold</item>
+        <item name="colorPrimary">@color/accent_gold</item>
+        <item name="colorAccent">@color/accent_gold</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+    </style>
+</resources>
