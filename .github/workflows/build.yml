@@ -7,6 +7,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,8 +25,17 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Setup Android SDK (preinstalled on runner)
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ -x "$SDKM" ]; then
+            yes | "$SDKM" --licenses > /dev/null 2>&1 || true
+            "$SDKM" "platform-tools" "platforms;android-34" "build-tools;34.0.0" || true
+          else
+            echo "sdkmanager not found; relying on Gradle auto-download (licenses preaccepted on runner)"
+          fi
+          ls "$ANDROID_HOME/platforms" 2>/dev/null || true
 
       - name: Grant execute permission for gradlew
         run: |
@@ -38,17 +50,12 @@ jobs:
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Build release APK (unsigned)
-        run: ./gradlew assembleRelease --no-daemon || echo "Release build skipped or failed"
-
       - name: List APK outputs
         run: |
           echo "=== Debug APKs ==="
           find app/build/outputs/apk/debug -name "*.apk" -exec ls -lh {} \; 2>/dev/null || echo "No debug APK"
-          echo "=== Release APKs ==="
-          find app/build/outputs/apk/release -name "*.apk" -exec ls -lh {} \; 2>/dev/null || echo "No release APK"
 
-      - name: Upload debug APK
+      - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: KidsTvGuard-debug-apk
@@ -56,20 +63,15 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Upload release APK (if exists)
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: KidsTvGuard-release-apk
-          path: app/build/outputs/apk/release/*.apk
-          if-no-files-found: ignore
-          retention-days: 30
-
-      - name: Upload mapping (if minify enabled)
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: KidsTvGuard-mapping
-          path: app/build/outputs/mapping/
-          if-no-files-found: ignore
-          retention-days: 30
+      - name: Publish APK to Release (fixed download link)
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete apk-latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create apk-latest \
+            app/build/outputs/apk/debug/app-debug.apk \
+            --title "Latest APK (auto-build)" \
+            --notes "Auto-built debug APK from ${{ github.sha }}" \
+            --prerelease
+          echo "Download: https://github.com/${{ github.repository }}/releases/download/apk-latest/app-debug.apk"
