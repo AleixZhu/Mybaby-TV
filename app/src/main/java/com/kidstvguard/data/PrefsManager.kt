@@ -72,10 +72,15 @@ class PrefsManager private constructor(context: Context) {
         get() = sp.getBoolean(KEY_PENDING_POPUP, false)
         set(v) = sp.edit().putBoolean(KEY_PENDING_POPUP, v).apply()
 
-    /** 关机那一刻累计的连错次数（0..maxQuestionsPerRound-1），决定开机后应出几道题。 */
+    /** 关机那一刻本轮已累计的答错次数（0..maxQuestionsPerRound），决定开机后 required = min(1+此值, max)。 */
     var pendingWrongStreak: Int
         get() = sp.getInt(KEY_PENDING_STREAK, 0)
         set(v) = sp.edit().putInt(KEY_PENDING_STREAK, v).apply()
+
+    /** 关机那一刻本轮已累计的连对次数（0..required），开机后沿用，避免关机躲题。 */
+    var pendingCorrectStreak: Int
+        get() = sp.getInt(KEY_PENDING_CORRECT_STREAK, 0)
+        set(v) = sp.edit().putInt(KEY_PENDING_CORRECT_STREAK, v).apply()
 
     /** 上次成功答完一轮的时间戳（毫秒），用于展示统计。 */
     var lastRoundClearedAt: Long
@@ -141,6 +146,7 @@ class PrefsManager private constructor(context: Context) {
         private const val KEY_PASSWORD_HASH = "password_hash"
         private const val KEY_PENDING_POPUP = "pending_popup_on_boot"
         private const val KEY_PENDING_STREAK = "pending_wrong_streak"
+        private const val KEY_PENDING_CORRECT_STREAK = "pending_correct_streak"
         private const val KEY_LAST_CLEARED = "last_round_cleared_at"
         private const val KEY_WATCH_ELAPSED = "current_watch_elapsed_ms"
 

@@ -102,6 +102,19 @@ class MainActivity : AppCompatActivity() {
             GuardService.popNow(this)
         }
 
+        // 退出应用但保留 GuardService 继续跑：
+        //  - finishAffinity() 关掉本 APP 所有 Activity 栈；
+        //  - 不调 GuardService.stop()，前台服务由系统保留，孩子回到视频 APP 后仍会按间隔弹题。
+        findViewById<Button>(R.id.btn_exit_app).setOnClickListener {
+            val running = GuardServiceRunning.isRunning(this)
+            Toast.makeText(
+                this,
+                if (running) "已退出，守护继续运行" else "已退出（提示：守护未启动）",
+                Toast.LENGTH_SHORT
+            ).show()
+            finishAffinity()
+        }
+
         // 打开 APP 时静默检查更新：有新版本才弹框，没有就不打扰
         if (prefs.autoCheckUpdate) {
             UpdateManager.check(this, silentIfNone = true)

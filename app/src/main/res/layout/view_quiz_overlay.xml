@@ -32,7 +32,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:gravity="center"
-            android:text="第 1 / 1 题"
+            android:text="需连续答对 1 题"
             android:textColor="#B0BEC5"
             android:textSize="14sp" />
 
@@ -117,7 +117,19 @@
             android:textColor="#81C784"
             android:textSize="16sp" />
 
-        <!-- 连错到上限时展示的家长解锁区 -->
+        <!-- 管理员解锁入口：任何时刻都可以点 -->
+        <Button
+            android:id="@+id/btn_admin_unlock"
+            style="@style/RowButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
+            android:minWidth="200dp"
+            android:text="管理员解锁"
+            android:textSize="14sp" />
+
+        <!-- 密码输入面板：点了「管理员解锁」后展开 -->
         <LinearLayout
             android:id="@+id/lock_panel"
             android:layout_width="match_parent"
@@ -127,10 +139,11 @@
             android:visibility="gone">
 
             <TextView
+                android:id="@+id/tv_lock_hint"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center"
-                android:text="本轮答错已达上限，请家长输入密码解锁"
+                android:text="请输入家长密码解锁"
                 android:textColor="#EF9A9A"
                 android:textSize="16sp" />
 
@@ -160,8 +173,17 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="12dp"
-                    android:minWidth="120dp"
-                    android:text="解锁" />
+                    android:minWidth="100dp"
+                    android:text="确认解锁" />
+
+                <Button
+                    android:id="@+id/btn_unlock_cancel"
+                    style="@style/RowButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:minWidth="100dp"
+                    android:text="返回答题" />
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>

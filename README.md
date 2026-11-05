@@ -1,6 +1,6 @@
 # 公主答题可看（KidsTvGuard）
 
-在智能电视（Android TV / 厂商定制 Android）上运行的家长管控 APP。孩子看视频 APP 到设定时间就弹题；答对继续看，答错加题，最多加到 5 道；关机再开机若上次没答完，立即补弹。
+在智能电视（Android TV / 厂商定制 Android）上运行的家长管控 APP。孩子看视频 APP 到设定时间就弹题；**必须连续答对 N 题才放行**（N 从 1 开始，答错一次 +1，最高到 5），家长可随时用密码「管理员解锁」直接放行；关机再开机若上次没答完，立即补弹，沿用当时的连对/答错进度。
 
 ## 覆盖的需求
 
@@ -8,13 +8,15 @@
 | --- | --- |
 | 每 5/10/15/20/30 分钟弹题 | 设置页 RadioGroup 五档，值持久化到 `SharedPreferences` |
 | 答对可继续看电视 | 悬浮窗关闭 → `GuardService` 重置计时 |
-| 答错加一道题，最多 5 道 | `QuizOverlayController.onAnswer` 累加 `wrongStreak`，动态扩队列到 `1+wrongStreak`，封顶 `maxQuestionsPerRound=5` |
+| 答错加一道题，最多 5 道 | 连对模型：`required = min(1 + wrongCount, maxQuestionsPerRound)`，答错后 `correctStreak` 归零、`required` +1；必须 `correctStreak >= required` 才通关 |
+| 答题过程中「管理员解锁」直接放行 | 悬浮窗底部常驻按钮，点击展开密码框；密码正确立即结束本轮（`finishRound(clearedByAnswer=false)`）；密码错误仅提示，可点「返回答题」继续 |
 | 弹窗开关可配置 | 设置页顶部 Switch，写入 `popupEnabled` |
 | 修改弹窗时长需要密码 | 进入设置页整体走密码门（`dialog_password.xml`）；默认密码 `1234`，可在设置页最下方修改；密码用 SHA-256 加盐存 SP |
 | 分年级题库，设置页可选年级 | 设置页"当前年级"卡片，`-/+` 步进切换 0=不区分 / 1–6 小学 / 7–9 初中；题目 JSON 支持 `"grade": 3` 或 `"grades": [1,2,3]` 字段；远程 URL 支持 `{grade}` / `{N}` 模板，切换年级自动重新拉取 |
-| 弹题时题目随机 | `QuestionRepository.pickRandom` 用 `System.nanoTime()` 做种子洗牌，优先抽符合当前年级的题，同轮内按题干去重（`usedStems`），池不够时补通用题 |
-| 每题 60 秒倒计时 | 悬浮窗顶部显示"剩余 X 秒"，每 100ms 刷新；≤10 秒时字体加粗变红（`#FF1744`）；到点视为答错，`wrongStreak++` 后进入下一题（连错到上限才锁死等家长） |
-| 未答题就关机 → 开机立即弹 | 弹题开始即置 `pendingPopupOnBoot=true` + `pendingWrongStreak`，成功结束时清 false；`BootReceiver` 收 `BOOT_COMPLETED` 拉起 `GuardService`，Service `onCreate` 读到 true 立即弹，且沿用关机前的连错次数继续出题 |
+| 弹题时题目随机 | `QuestionRepository.pickRandom` 用 `System.nanoTime()` 做种子洗牌，优先抽符合当前年级的题，控制器内维护 `recentlyUsed` 队列（最近 6 道题干）避免立刻重复 |
+| 每题 60 秒倒计时 | 悬浮窗顶部显示"剩余 X 秒"，每 100ms 刷新；≤10 秒时字体加粗变红（`#FF1744`）；到点视为答错，`wrongCount++`、`correctStreak=0`、`required` 上调后进入下一题 |
+| 启动后可退出 APP，但守护继续跑 | 主页底部「退出应用（守护继续运行）」按钮，`finishAffinity()` 关掉 Activity 栈，不调 `GuardService.stop()`，前台服务独立存活；孩子回到视频 APP 依旧按间隔弹题 |
+| 未答题就关机 → 开机立即弹 | 弹题开始即置 `pendingPopupOnBoot=true` + `pendingWrongStreak` + `pendingCorrectStreak`，成功结束时全清；`BootReceiver` 收 `BOOT_COMPLETED` 拉起 `GuardService`，Service `onCreate` 读到 true 立即弹，且沿用关机前的 wrongCount/correctStreak 继续答题 |
 
 ## 关键技术边界（务必看）
 
@@ -24,7 +26,7 @@
 
 - **前台是 Android 视频 APP**（爱奇艺/腾讯/优酷/B站/YouTube/Netflix 等，白名单在 `UsageStatsHelper.VIDEO_PACKAGES`）→ 正常累计观看时长，到点弹题。
 - **前台是 HDMI/直播信号** → 无法用 `UsageStatsManager` 识别；计时暂停，等孩子切回任意 Android 视频 APP 前台的瞬间立即继续计时。
-- **上锁场景**（连错 5 次或单题超时）→ 悬浮窗持续显示，需要家长输入密码才能关闭，即使孩子切走 APP，回到桌面/任何前台都会看到悬浮窗（Android 系统层特性）。
+- **答题过程中悬浮窗持续显示**，孩子切走 APP 到任何前台都会看到（Android 系统层特性）；家长可直接在悬浮窗内点「管理员解锁」输密码放行，不用退出答题界面。
 
 **要真在 HDMI 上弹题**，只能走下列路子：找电视厂商拿平台签名，把 APP 作为系统应用预装，用 `TYPE_SYSTEM_ERROR` 或私有 HDMI 叠加接口；或者用带 HDMI-CEC 阻断能力的外接盒子。普通用户侧无解。
 
@@ -419,15 +421,16 @@ APP 设置：远程 URL 填 `https://your-name.gitee.io/kids-tv-bank/grade{grade
 2. **不作答**，直接长按电视电源键关机（或拔电）。
 3. 开机 → 通知栏出现"公主答题可看 运行中" → 约 1.5 秒后答题窗立即弹出。
 
-原理：`show()` 时写 `pendingPopupOnBoot=true`，`finishRound()` 时写 false。中途断电，标记保留在 SharedPreferences 里。`BootReceiver` 收到 `BOOT_COMPLETED` 拉起 `GuardService`，Service `onCreate` 读到 true 就调用 `controller.show(bootPending=true)`，并且沿用关机前的 `wrongStreak`，孩子接着答剩下的题。
+原理：`show()` 时写 `pendingPopupOnBoot=true`，`finishRound()` 时写 false。中途断电，标记保留在 SharedPreferences 里。`BootReceiver` 收到 `BOOT_COMPLETED` 拉起 `GuardService`，Service `onCreate` 读到 true 就调用 `controller.show(bootPending=true)`，并且沿用关机前的 `pendingWrongStreak` / `pendingCorrectStreak`——孩子接着答剩下的题，连对进度不清零，required 也不重置。
 
 ## 已知的取舍
 
 - **前台是桌面/设置时不计时**：避免家长自己用电视时被误伤；孩子切桌面逃避弹题也不会清零，切回视频 APP 会接着算。
-- **倒计时到点视为答错**：单题 60 秒（可调）内没按选项，按答错处理，`wrongStreak++` 后进入下一题；只有连错达到上限（默认 5 次）才锁死悬浮窗等家长密码。这样孩子走神一两次不至于直接被锁。
-- **锁死场景需要家长密码**：防止孩子通过"故意答错到底"绕过；密码门在悬浮窗内直接输入，不用退出。
+- **倒计时到点视为答错**：单题 60 秒（可调）内没按选项，按答错处理，`wrongCount++` + `correctStreak` 清零 + `required` 上调后进入下一题。孩子走神一两次不至于直接被锁死，但连对进度要重新攒。
+- **管理员解锁按钮常驻**：答题过程中家长可以随时按遥控器聚焦到底部「管理员解锁」→ 输密码放行，不需要孩子先答错到上限。密码错误仅提示，可点「返回答题」继续，不做惩罚。
+- **退出 APP 不停守护**：主页「退出应用（守护继续运行）」只 finish Activity，前台服务独立存活；如需彻底停守护，走「停止」按钮或到系统设置里强行停止。
 - **年级过滤有回退**：当前年级没有匹配题时，会自动退回全部题目池，避免"切到某个年级后弹不出题"。
-- **服务被系统杀**：Android TV 后台管理严格的机型可能会杀前台服务；`GuardService` 用 `START_STICKY`，被杀后系统会尝试重启，且 `pendingPopupOnBoot` 状态保留。
+- **服务被系统杀**：Android TV 后台管理严格的机型可能会杀前台服务；`GuardService` 用 `START_STICKY`，被杀后系统会尝试重启，且 `pendingPopupOnBoot` / `pendingWrongStreak` / `pendingCorrectStreak` 状态保留。
 - **多用户/儿童模式**：目前没有做用户区分，全设备生效。
 
 ## 后续可扩展（当前未实现）
@@ -441,3 +444,4 @@ APP 设置：远程 URL 填 `https://your-name.gitee.io/kids-tv-bank/grade{grade
 ## 版本
 
 - 1.0.0 — 首版，覆盖需求 1–4。
+- v2（连对模型）— 通关规则改为「必须连续答对 N 题」（N = min(1+累计答错, 5)），答题过程新增「管理员解锁」按钮，主页新增「退出应用（守护继续运行）」按钮，断电续弹同时保留 wrongCount/correctStreak。

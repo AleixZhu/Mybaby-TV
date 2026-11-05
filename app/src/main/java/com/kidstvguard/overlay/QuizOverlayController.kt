@@ -24,17 +24,23 @@ import com.kidstvguard.data.Question
 import com.kidstvguard.data.QuestionRepository
 
 /**
- * 悬浮答题窗控制器。
+ * 悬浮答题窗控制器（连对模型 v2）。
  *
- * 状态机：
- *  - 每次 show() 开启一轮：题目总数 = 1 + 连错次数，最多 [PrefsManager.maxQuestionsPerRound] 道。
- *  - 题目从当前年级题库中随机抽取（[PrefsManager.selectedGrade] + [Question.matchesGrade]）。
- *  - 答对当前题 → 结束本轮，回调 [onCleared]（Service 用来重置计时）。
- *  - 答错当前题 或 单题倒计时到点 → 立即出下一题；wrongStreak++。
- *  - 达到上限后仍未答对 → 展示家长密码解锁区。
+ * 通关规则：
+ *  - 初始必须**连续答对 1 题**才通过；
+ *  - 每答错 1 题，`required` +1（同时 correctStreak 归零），最高到 [PrefsManager.maxQuestionsPerRound]（默认 5）；
+ *  - 只要 `correctStreak >= required` 就算通关，回调 [onCleared]（Service 用来重置观看计时）。
+ *  - 单题倒计时到点 = 该题答错，required 递增、correctStreak 清零，出下一题。
  *
- * 断电续弹：只要 show() 被调用，[PrefsManager.pendingPopupOnBoot] 立刻置 true；
- * 本轮成功结束时置 false。因此若中途关机，下次开机 GuardService 读到 true 就立即再弹。
+ * 管理员解锁：
+ *  - 答题过程中任何时候都可以点「管理员解锁」按钮，弹出密码框；
+ *  - 密码正确 → 立即结束本轮（等同家长亲自放行），不再要求孩子答题；
+ *  - 密码错误 → 提示后回到题目继续作答，不做惩罚。
+ *
+ * 断电续弹：
+ *  - `show()` 后立刻把 `pendingPopupOnBoot=true` + 当前 `wrongCount` + `correctStreak` 落盘；
+ *  - 中途关机 → 下次开机 GuardService 读到 true 就重新弹，并沿用上次的 wrongCount/correctStreak；
+ *  - 本轮成功结束（答对/管理员解锁）→ 清空所有 pending 状态。
  */
 class QuizOverlayController(private val context: Context) {
 
@@ -45,11 +51,22 @@ class QuizOverlayController(private val context: Context) {
 
     private var root: View? = null
     private var countdown: CountDownTimer? = null
-    private var currentQueue: List<Question> = emptyList()
-    private var usedStems: MutableSet<String> = mutableSetOf()
-    private var currentIndex = 0
-    private var wrongStreak = 0
-    private var totalSlots = 1
+
+    /** 本轮累计答错次数（0..maxQuestionsPerRound）。 */
+    private var wrongCount = 0
+
+    /** 当前连对次数（0..required）。 */
+    private var correctStreak = 0
+
+    /** 本轮通关所需的连对题数 = min(1 + wrongCount, maxQuestionsPerRound)。 */
+    private var required = 1
+
+    /** 当前正在作答的题目。 */
+    private var currentQuestion: Question? = null
+
+    /** 最近若干道已用过的题干，避免立刻重复。 */
+    private val recentlyUsed = ArrayDeque<String>()
+    private val recentHistoryLimit = 6
 
     var onCleared: (() -> Unit)? = null
     var onLocked: (() -> Unit)? = null
@@ -76,7 +93,7 @@ class QuizOverlayController(private val context: Context) {
 
     /**
      * 启动一轮答题。
-     * @param bootPending 是否是"关机前遗留"的场景，若是则沿用持久化的 wrongStreak。
+     * @param bootPending true = 关机前遗留的场景，沿用持久化的 wrongCount / correctStreak。
      */
     fun show(bootPending: Boolean = false) {
         if (isShowing) return
@@ -85,36 +102,47 @@ class QuizOverlayController(private val context: Context) {
             return
         }
 
-        wrongStreak = if (bootPending) prefs.pendingWrongStreak.coerceIn(0, prefs.maxQuestionsPerRound - 1) else 0
-        totalSlots = (1 + wrongStreak).coerceAtMost(prefs.maxQuestionsPerRound)
-
-        usedStems.clear()
-        currentQueue = pickNew(totalSlots)
-        if (currentQueue.isEmpty()) {
-            Toast.makeText(context, "当前年级题库为空，请在设置里检查", Toast.LENGTH_LONG).show()
-            return
+        val max = prefs.maxQuestionsPerRound.coerceAtLeast(1)
+        if (bootPending) {
+            wrongCount = prefs.pendingWrongStreak.coerceIn(0, max)
+            correctStreak = prefs.pendingCorrectStreak.coerceIn(0, max)
+        } else {
+            wrongCount = 0
+            correctStreak = 0
         }
-        currentQueue.forEach { usedStems.add(it.stem) }
-        currentIndex = 0
+        required = (1 + wrongCount).coerceAtMost(max)
+        // 断电续弹时，若历史连对已超过 required（罕见，例如 required 曾经更高），钳制一下
+        if (correctStreak > required) correctStreak = required
+
+        recentlyUsed.clear()
 
         // 断电续弹标记：本轮未结束前一直保持 true
         prefs.pendingPopupOnBoot = true
-        prefs.pendingWrongStreak = wrongStreak
+        prefs.pendingWrongStreak = wrongCount
+        prefs.pendingCorrectStreak = correctStreak
 
         addRootView()
-        renderQuestion()
+        nextQuestion()
     }
 
-    /** 抽 count 道题，尽量避开已用过的题干。 */
-    private fun pickNew(count: Int): List<Question> {
+    /** 抽一道题（尽量避开最近用过的题干），渲染到面板。 */
+    private fun nextQuestion() {
         val grade = prefs.selectedGrade
-        // 一次抽多点再过滤已用
-        val candidates = repo.pickRandom(count * 3, grade)
-        val fresh = candidates.filter { it.stem !in usedStems }.take(count)
-        if (fresh.size >= count) return fresh
-        // 池不够，允许重复
-        val fill = candidates.take(count - fresh.size)
-        return fresh + fill
+        val candidates = repo.pickRandom(6, grade)
+        val fresh = candidates.firstOrNull { it.stem !in recentlyUsed }
+            ?: candidates.firstOrNull()
+
+        if (fresh == null) {
+            Toast.makeText(context, "当前年级题库为空，请在设置里检查", Toast.LENGTH_LONG).show()
+            finishRound(clearedByAnswer = false, silent = true)
+            return
+        }
+
+        currentQuestion = fresh
+        recentlyUsed.addLast(fresh.stem)
+        while (recentlyUsed.size > recentHistoryLimit) recentlyUsed.removeFirst()
+
+        renderQuestion()
     }
 
     private fun addRootView() {
@@ -156,6 +184,17 @@ class QuizOverlayController(private val context: Context) {
             return
         }
 
+        // 管理员解锁按钮：任何时刻都可以点，点了展开密码面板
+        view.findViewById<Button>(R.id.btn_admin_unlock)?.setOnClickListener {
+            showAdminUnlockPanel()
+        }
+        view.findViewById<Button>(R.id.btn_unlock)?.setOnClickListener {
+            onAdminUnlockSubmit()
+        }
+        view.findViewById<Button>(R.id.btn_unlock_cancel)?.setOnClickListener {
+            hideAdminUnlockPanel()
+        }
+
         view.post {
             view.findViewById<Button>(R.id.btn_opt_0)?.requestFocus()
         }
@@ -163,15 +202,19 @@ class QuizOverlayController(private val context: Context) {
 
     private fun renderQuestion() {
         val view = root ?: return
-        val q = currentQueue.getOrNull(currentIndex) ?: run { finishRound(true); return }
+        val q = currentQuestion ?: return
 
         view.findViewById<TextView>(R.id.tv_header).text =
             "${prefs.selectedGradeLabel()} · 答题时间到"
         view.findViewById<TextView>(R.id.tv_progress).text =
-            "第 ${currentIndex + 1} / $totalSlots 题（连错 $wrongStreak 次）"
+            "需连续答对 $required 题 · 已连对 $correctStreak 题（本轮已错 $wrongCount 次）"
         view.findViewById<TextView>(R.id.tv_stem).text = q.stem
         view.findViewById<TextView>(R.id.tv_feedback).text = ""
         view.findViewById<LinearLayout>(R.id.lock_panel).visibility = View.GONE
+        view.findViewById<Button>(R.id.btn_admin_unlock)?.apply {
+            visibility = View.VISIBLE
+            isEnabled = true
+        }
 
         val optIds = intArrayOf(R.id.btn_opt_0, R.id.btn_opt_1, R.id.btn_opt_2, R.id.btn_opt_3)
         val labels = charArrayOf('A', 'B', 'C', 'D')
@@ -213,7 +256,6 @@ class QuizOverlayController(private val context: Context) {
             override fun onFinish() {
                 timerView.text = "时间到"
                 timerView.setTextColor(0xFFFF1744.toInt())
-                // 超时 = 当次答错，进入下一题（与选错一致）
                 handleWrong("本题 ${totalSec} 秒内未作答")
             }
         }.start()
@@ -221,55 +263,53 @@ class QuizOverlayController(private val context: Context) {
 
     private fun onAnswer(picked: Int) {
         val view = root ?: return
-        val q = currentQueue.getOrNull(currentIndex) ?: return
+        val q = currentQuestion ?: return
         countdown?.cancel()
+        disableAllOptions(view)
 
         val correct = picked == q.answer
         val feedback = view.findViewById<TextView>(R.id.tv_feedback)
 
         if (correct) {
+            correctStreak++
+            prefs.pendingCorrectStreak = correctStreak
+
             feedback.setTextColor(0xFF81C784.toInt())
-            feedback.text = if (wrongStreak == 0) "答对啦！继续看电视～"
-                            else "答对了！本轮共错 $wrongStreak 次，继续看电视～"
-            disableAllOptions(view)
-            mainHandler.postDelayed({ finishRound(true) }, 900)
+            feedback.text = if (correctStreak >= required) {
+                "答对啦！本轮共错 $wrongCount 次，继续看电视～"
+            } else {
+                "答对了！还需再连对 ${required - correctStreak} 题"
+            }
+
+            if (correctStreak >= required) {
+                mainHandler.postDelayed({ finishRound(clearedByAnswer = true) }, 900)
+            } else {
+                mainHandler.postDelayed({ nextQuestion() }, 900)
+            }
         } else {
             val explain = q.explain?.let { "（$it）" } ?: ""
             handleWrong("答错了 $explain")
         }
     }
 
-    /** 答错或超时的统一处理：wrongStreak++，未达上限就出下一题，达上限就锁死等家长。 */
+    /** 答错或超时的统一处理：wrongCount++，correctStreak 归零，required 上调，出下一题。 */
     private fun handleWrong(message: String) {
         val view = root ?: return
         countdown?.cancel()
         disableAllOptions(view)
 
-        wrongStreak++
-        prefs.pendingWrongStreak = wrongStreak
+        wrongCount++
+        correctStreak = 0
+        required = (1 + wrongCount).coerceAtMost(prefs.maxQuestionsPerRound.coerceAtLeast(1))
+
+        prefs.pendingWrongStreak = wrongCount
+        prefs.pendingCorrectStreak = 0
 
         val feedback = view.findViewById<TextView>(R.id.tv_feedback)
         feedback.setTextColor(0xFFEF9A9A.toInt())
-        feedback.text = message
+        feedback.text = message + "，连对进度已清零，需连对 $required 题"
 
-        val nextSlots = (1 + wrongStreak).coerceAtMost(prefs.maxQuestionsPerRound)
-        if (nextSlots > totalSlots) {
-            totalSlots = nextSlots
-            if (currentQueue.size < totalSlots) {
-                val extra = pickNew(totalSlots - currentQueue.size)
-                currentQueue = currentQueue + extra
-                extra.forEach { usedStems.add(it.stem) }
-            }
-        }
-
-        if (wrongStreak >= prefs.maxQuestionsPerRound) {
-            mainHandler.postDelayed({ lockForParent("连错已达 $wrongStreak 次") }, 900)
-        } else {
-            mainHandler.postDelayed({
-                currentIndex++
-                renderQuestion()
-            }, 900)
-        }
+        mainHandler.postDelayed({ nextQuestion() }, 1100)
     }
 
     private fun disableAllOptions(view: View) {
@@ -277,40 +317,54 @@ class QuizOverlayController(private val context: Context) {
         optIds.forEach { view.findViewById<Button>(it)?.isEnabled = false }
     }
 
-    private fun lockForParent(reason: String) {
-        val view = root ?: return
-        countdown?.cancel()
-        disableAllOptions(view)
-        view.findViewById<TextView>(R.id.tv_feedback).apply {
-            setTextColor(0xFFEF9A9A.toInt())
-            text = reason + "，请家长解锁"
-        }
-        view.findViewById<TextView>(R.id.tv_progress).text = "已锁定"
-        view.findViewById<TextView>(R.id.tv_timer).text = ""
-        val lockPanel = view.findViewById<LinearLayout>(R.id.lock_panel)
-        lockPanel.visibility = View.VISIBLE
+    // ===== 管理员解锁 =====
 
+    private fun showAdminUnlockPanel() {
+        val view = root ?: return
+        // 取消所有正在倒计时的下一题/finishRound 回调，避免面板被自动切走
+        countdown?.cancel()
+        mainHandler.removeCallbacksAndMessages(null)
+        disableAllOptions(view)
+        view.findViewById<Button>(R.id.btn_admin_unlock)?.isEnabled = false
+        val panel = view.findViewById<LinearLayout>(R.id.lock_panel)
+        panel.visibility = View.VISIBLE
+        view.findViewById<TextView>(R.id.tv_lock_hint)?.text =
+            "管理员解锁：输入家长密码后可直接放行本轮"
         val et = view.findViewById<EditText>(R.id.et_password)
-        val btn = view.findViewById<Button>(R.id.btn_unlock)
         et.text?.clear()
-        btn.setOnClickListener {
-            val input = et.text?.toString().orEmpty()
-            if (prefs.verifyPassword(input)) {
-                finishRound(false)
-            } else {
-                Toast.makeText(context, "密码错误", Toast.LENGTH_SHORT).show()
-            }
-        }
         view.post { et.requestFocus() }
         onLocked?.invoke()
     }
 
+    private fun hideAdminUnlockPanel() {
+        val view = root ?: return
+        view.findViewById<LinearLayout>(R.id.lock_panel).visibility = View.GONE
+        view.findViewById<Button>(R.id.btn_admin_unlock)?.isEnabled = true
+        // 回到当前题目继续作答（重启倒计时，避免"点开面板就白嫖时间"）
+        renderQuestion()
+    }
+
+    private fun onAdminUnlockSubmit() {
+        val view = root ?: return
+        val et = view.findViewById<EditText>(R.id.et_password)
+        val input = et.text?.toString().orEmpty()
+        if (prefs.verifyPassword(input)) {
+            Toast.makeText(context, "已解锁，继续看电视吧", Toast.LENGTH_SHORT).show()
+            finishRound(clearedByAnswer = false)
+        } else {
+            Toast.makeText(context, "密码错误，请重试或返回继续答题", Toast.LENGTH_SHORT).show()
+            et.text?.clear()
+        }
+    }
+
     /**
-     * @param clearedByAnswer true = 孩子自己答对通过；false = 家长密码解锁。
+     * @param clearedByAnswer true = 孩子自己连对通过；false = 管理员密码解锁 / 题库为空等异常收尾。
+     * @param silent true = 不显示任何 Toast（异常场景）。
      */
-    private fun finishRound(clearedByAnswer: Boolean) {
+    private fun finishRound(clearedByAnswer: Boolean, silent: Boolean = false) {
         prefs.pendingPopupOnBoot = false
         prefs.pendingWrongStreak = 0
+        prefs.pendingCorrectStreak = 0
         if (clearedByAnswer) {
             prefs.lastRoundClearedAt = System.currentTimeMillis()
         }
@@ -325,11 +379,11 @@ class QuizOverlayController(private val context: Context) {
             try { wm.removeView(it) } catch (_: Throwable) {}
         }
         root = null
-        currentQueue = emptyList()
-        usedStems.clear()
-        currentIndex = 0
-        wrongStreak = 0
-        totalSlots = 1
+        currentQuestion = null
+        recentlyUsed.clear()
+        wrongCount = 0
+        correctStreak = 0
+        required = 1
     }
 
     fun dismissSilently() {

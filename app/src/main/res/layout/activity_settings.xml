@@ -192,7 +192,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="每轮最多题数（默认 5，答错一次加一题）"
+                android:text="通关所需最高连对题数（默认 5，答错一次 required +1，连对达标才放行）"
                 android:textColor="#FFFFFF"
                 android:textSize="16sp" />
 
